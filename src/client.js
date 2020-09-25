@@ -1,21 +1,26 @@
 const net = require('net');
-
 const host = '127.0.0.1';
 const port = 12345;
 
-exports.start = (mainWindow) => {
-  let client = new net.Socket();
-  client.connect(port, host, function () {
-    console.log(`Connected to ${host}:${port}.`)
-    client.write('Hello, server! Love, Client.');
-  });
+class Client  {
+  constructor(mainWindow) {
+    this.socket = new net.Socket();
+    this.socket.connect(port, host, () => {
+      console.log(`Connected to ${host}:${port}.`)
+      this.socket.write('Hello, server! Love, Client.');
+    });
+  
+    this.socket.on('data', (data) => {
+      mainWindow.webContents.send('ping', data.toString());
+    });
+  
+    this.socket.on('close', () => {
+      console.log(`Connection to ${host}:${port} closed.`)
+    });
+  }
+  endConnection() {
+    this.socket.end();
+  }
+}
 
-  client.on('data', function (data) {
-    mainWindow.webContents.send('ping', data.toString());
-    client.destroy();
-  });
-
-  client.on('close', function () {
-    console.log(`Connection to ${host}:${port} closed.`)
-  });
-};
+module.exports = Client;
