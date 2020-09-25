@@ -1,0 +1,37 @@
+body {
+  background-color: #e8e8e8;
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  padding: 1rem;
+  grid-template-areas:
+  'users-list    chat-window   chat-window        '
+  'message-input message-input send-message-button'
+  'message-input message-input send-file-button   ';
+  grid-template-columns: 10rem 1fr auto;
+  grid-template-rows: 1fr auto;
+  grid-gap: 1rem;
+}
+
+.users-list {
+  grid-area: users-list;
+  background-color: #fff;
+}
+
+.message-input {
+  grid-area: message-input;
+  background-color: #fff;
+}
+
+.chat-window {
+  grid-area: chat-window;
+  background-color: #fff;
+}
+
+.send-message-button {
+  grid-area: send-message-button;
+}
+
+.send-file-button {
+  grid-area: send-file-button;
+}
