@@ -16,6 +16,7 @@ body {
 .users-list {
   grid-area: users-list;
   background-color: #fff;
+  overflow-y: scroll; 
 }
 
 .message-input {
@@ -26,6 +27,7 @@ body {
 .chat-window {
   grid-area: chat-window;
   background-color: #fff;
+  overflow-y: scroll; 
 }
 
 .send-message-button {

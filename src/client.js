@@ -15,7 +15,7 @@ class Client {
   connect(host, port, username) {
     this.socket.connect(port, host, () => {
       console.log(`Connected to server at ${host}:${port}.`);
-      this.socket.write(`LOGIN:${username}\n`);
+      this.socket.write(`/login ${username}\n`);
     });
     this.socket.on('close', () => {
       console.log(`Connection to server at ${host}:${port} closed.`);
@@ -33,22 +33,40 @@ class Client {
         if (!msg) continue;
         console.log(`Received data: ${msg}`);
         let messageText = '';
-        if (data.toString().startsWith('USERNAME_ERROR:')) {
-          messageText = 'Erro de usuário: ' + msg.substring(15);
+        if (msg.startsWith('/username_error ')) {
+          messageText = 'Erro de nome de usuário: ' + msg.substring(16);
         }
-        if (data.toString().startsWith('MOTD:')) {
-          messageText = 'Mensagem do dia: ' + msg.substring(5);
+        if (msg.startsWith('/motd ')) {
+          messageText = msg.substring(6);
         }
-        if (data.toString().startsWith('PUBLICMSG:')) {
-          messageText = msg.substring(10);
+        if (msg.startsWith('/public_msg ')) {
+          messageText = msg.substring(11);
         }
-        if (data.toString().startsWith('USER_LIST:')) {
-          this.users = msg.substring(10).split(',');
-          this.users.forEach((user) => {
+        if (msg.startsWith('/user_list ')) {
+          this.users = msg.substring(11).split(',');
+          this.users.forEach((username) => {
             window.webContents.executeJavaScript(
-              `document.querySelector('.users-list').innerHTML += '<div class="m-1">${user}</div>';`
+              `document.querySelector('.users-list').innerHTML += '<div class="m-1" data-user="${username}">${username}</div>';`
             );
           });
+        }
+        if (msg.startsWith('/user_joined ')) {
+          let username = msg.substring(13);
+          window.webContents.executeJavaScript(
+            `document.querySelector('.users-list').innerHTML += '<div class="m-1" data-user="${username}">${username}</div>';`
+          );
+          window.webContents.executeJavaScript(
+            `document.querySelector('.chat-window').innerHTML += '<div class="m-1">${username} entrou no servidor.</div>';`
+          );
+        }
+        if (msg.startsWith('/user_left ')) {
+          let username = msg.substring(11);
+          window.webContents.executeJavaScript(
+            `document.querySelector('.users-list div[data-user="${username}"]').remove();`
+          );
+          window.webContents.executeJavaScript(
+            `document.querySelector('.chat-window').innerHTML += '<div class="m-1">${username} saiu do servidor.</div>';`
+          );
         }
         if (messageText) {
           window.webContents.executeJavaScript(
