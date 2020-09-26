@@ -22,6 +22,8 @@ body {
 .message-input {
   grid-area: message-input;
   background-color: #fff;
+  resize: none;
+  overflow-y: scroll; 
 }
 
 .chat-window {

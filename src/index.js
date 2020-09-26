@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 let Client = require('./client');
 let client;
+let window;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -15,10 +16,13 @@ const createWindow = () => {
     app.quit();
   }
 
-  const window = new BrowserWindow({
+  window = new BrowserWindow({
     width: 1240,
     height: 600,
     webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: false,
       preload: path.join(app.getAppPath(), 'src/preload.js'),
     },
   });
@@ -28,10 +32,10 @@ const createWindow = () => {
   window.webContents.openDevTools();
 
   window.webContents.once('dom-ready', () => {
-    client = new Client();
+    client = new Client(window);
     client.connect('127.0.0.1', 12345, process.argv[2]);
     client.socket.on('ready', () => {
-      client.listenForUpdates(window);
+      client.listenForUpdates();
     });
   });
 };
@@ -60,4 +64,15 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   client.endConnection();
+});
+  
+ipcMain.on('toMain', (event, args) => {
+  console.log(args);
+  // window.webContents.send('toRenderer', 'msg do main para o renderer!');
+});
+  
+ipcMain.on('newMessage', (event, args) => {
+  console.log(`ipcMain newMessage: ${args}`);
+  client.sendMessage(args);
+  // window.webContents.send('toRenderer', 'msg do main para o renderer!');
 });

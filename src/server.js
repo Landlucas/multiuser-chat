@@ -7,16 +7,19 @@ const server = net.createServer((socket) => {
   let loggedIn = false;
 
   socket.on('data', (data) => {
-    if (data.indexOf(msgEnd) >= 0 && data.toString().startsWith('/login ')) {
-      let msg = data.toString().split(msgEnd);
-      let username = msg[0].substring(7);
-      loggedIn = userLoginAttempt(socket, username);
-    }
-    if (loggedIn) {
-      if (data.toString().startsWith('/public_msg ')) {
-        sockets.forEach((socketReceiver) => {
-          socketReceiver.write(data.toString());
-        });
+    let textBuffer = data.toString().split(msgEnd);
+    for (let msg of textBuffer) {
+      if (!msg) continue;
+      if (msg.startsWith('/login ')) {
+        let username = msg.substring(7);
+        loggedIn = userLoginAttempt(socket, username);
+      }
+      if (loggedIn) {
+        if (msg.startsWith('/public_msg ')) {
+          sockets.forEach((socketReceiver) => {
+            socketReceiver.write(`/public_msg ${socket.name}: ${msg.substring(11)}${msgEnd}`);
+          });
+        }
       }
     }
   });
