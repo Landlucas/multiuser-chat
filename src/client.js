@@ -24,11 +24,20 @@ class Client {
     });
     this.socket.on('close', () => {
       console.log(`Connection to server at ${host}:${port} closed.`);
+      this.addNewChatLine(`Conexão com servidor fechada.`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
+    });
+    this.socket.on('end', () => {
+      console.log(`Connection to server at ${host}:${port} ended.`);
+      this.addNewChatLine(`Conexão com servidor finalizada.`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
+    });
+    this.socket.on('error', (error) => {
+      console.log(`Socket got problems: ${error.message}`);
+      this.addNewChatLine(`Erro: ${error.message}`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
     });
   }
 
   /**
-   * Listen for server updates.
+   * Listen for socket stream (server) updates.
    */
   listenForUpdates() {
     this.socket.on('data', (data) => {
@@ -36,55 +45,84 @@ class Client {
       for (let msg of textBuffer) {
         if (!msg) continue;
         console.log(`Received data: ${msg}`);
-        let messageText = '';
-        if (msg.startsWith('/username_error ')) {
-          messageText = 'Erro de nome de usuário: ' + msg.substring(16);
-        }
         if (msg.startsWith('/motd ')) {
-          this.window.webContents.executeJavaScript(
-            `document.querySelector('.chat-window').innerHTML += '<div class="m-1 font-weight-bolder">${msg.substring(6)}</div>';`
-          );
-        }
-        if (msg.startsWith('/public_msg ')) {
-          messageText = msg.substring(12);
+          this.addNewChatLine(msg.substring(6), ['m-1', 'font-italic', 'text-info']);
         }
         if (msg.startsWith('/user_list ')) {
           this.users = msg.substring(11).split(',');
           this.users.forEach((username) => {
-            this.window.webContents.executeJavaScript(
-              `document.querySelector('.users-list').innerHTML += '<div class="m-1" data-user="${username}">${username}</div>';`
-            );
+            this.addNewUser(username, ['m-1']);
           });
         }
         if (msg.startsWith('/user_joined ')) {
           let username = msg.substring(13);
-          this.window.webContents.executeJavaScript(
-            `document.querySelector('.users-list').innerHTML += '<div class="m-1" data-user="${username}">${username}</div>';`
-          );
-          this.window.webContents.executeJavaScript(
-            `document.querySelector('.chat-window').innerHTML += '<div class="m-1 font-italic">${username} entrou no servidor.</div>';`
-          );
+          this.addNewUser(username, ['m-1']);
+          this.addNewChatLine(`${username} entrou no servidor.`, ['m-1', 'font-italic']);
         }
         if (msg.startsWith('/user_left ')) {
           let username = msg.substring(11);
-          this.window.webContents.executeJavaScript(
-            `document.querySelector('.users-list div[data-user="${username}"]').remove();`
-          );
-          this.window.webContents.executeJavaScript(
-            `document.querySelector('.chat-window').innerHTML += '<div class="m-1">${username} saiu do servidor.</div>';`
-          );
+          this.removeUser(username);
+          this.addNewChatLine(`${username} saiu do servidor.`, ['m-1', 'font-italic']);
         }
-        if (messageText) {
-          this.window.webContents.executeJavaScript(
-            `document.querySelector('.chat-window').innerHTML += '<div class="m-1">${messageText}</div>';`
-          );
+        if (msg.startsWith('/public_msg ')) {
+          this.addNewChatLine(msg.substring(12), ['m-1']);
+        }
+        if (msg.startsWith('/private_msg ')) {
+          this.addNewChatLine(msg.substring(13), ['m-1', 'text-muted']);
+        }
+        if (msg.startsWith('/error ')) {
+          this.addNewChatLine(`Erro: ${msg.substring(7)}`, ['m-1', 'font-italic', 'text-danger']);
+        }
+        if (msg.startsWith('/warning ')) {
+          this.addNewChatLine(`${msg.substring(9)}`, ['m-1', 'font-italic', 'text-warning']);
         }
       }
     });
   }
 
-  sendMessage(message) {
-    this.socket.write(`/public_msg ${message}${msgEnd}`);
+  /**
+   * Send message to socket stream (server).
+   * @param {string} msg
+   */
+  sendMessage(msg) {
+    if (msg.startsWith('/w ')) {
+      console.log(`Sending private message: ${msg}`);
+      this.socket.write(`${msg}${msgEnd}`);
+    } else {
+      this.socket.write(`/public_msg ${msg}${msgEnd}`);
+    }
+  }
+
+  /**
+   * Concat new line in chat window.
+   * @param {string} line 
+   * @param {string[]} classes
+   */
+  addNewChatLine(line, classes) {
+    this.window.webContents.executeJavaScript(
+      `document.querySelector('.chat-window').innerHTML += '<div class="${classes.join(' ')}">${line}</div>';`
+    );
+  }
+
+  /**
+   * Concat new username in user window.
+   * @param {string} username 
+   * @param {string[]} classes
+   */
+  addNewUser(username, classes) {
+    this.window.webContents.executeJavaScript(
+      `document.querySelector('.users-list').innerHTML += '<div class="${classes.join(' ')}" data-user="${username}">${username}</div>';`
+    );
+  }
+
+  /**
+   * Remove username from user window.
+   * @param {string} username 
+   */
+  removeUser(username) {
+    this.window.webContents.executeJavaScript(
+      `document.querySelector('.users-list div[data-user="${username}"]').remove();`
+    );
   }
 
   endConnection() {

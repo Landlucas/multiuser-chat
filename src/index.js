@@ -18,7 +18,7 @@ const createWindow = () => {
 
   window = new BrowserWindow({
     width: 1240,
-    height: 600,
+    height: 800,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -68,11 +68,8 @@ app.on('before-quit', () => {
   
 ipcMain.on('toMain', (event, args) => {
   console.log(args);
-  // window.webContents.send('toRenderer', 'msg do main para o renderer!');
 });
   
 ipcMain.on('newMessage', (event, args) => {
-  console.log(`ipcMain newMessage: ${args}`);
   client.sendMessage(args);
-  // window.webContents.send('toRenderer', 'msg do main para o renderer!');
 });
