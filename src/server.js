@@ -1,45 +1,60 @@
-var net = require('net');
-var sockets = [];
-var port = 12345;
+const net = require('net');
+const msgTerminator = '\n';
+let sockets = [];
+let port = 12345;
 
-var server = net.createServer(function (socket) {
-  socket.name = socket.remoteAddress + ':' + socket.remotePort;
-
-  sockets.push(socket);
-
-  // Log it to the server output
-  console.log(socket.name + ' has joined the server.');
-
-  socket.write('Welcome to multiuser chat!\n');
-
-  // When client leaves
-  socket.on('end', function () {
-    console.log(socket.name + ' left the server.\n');
-
-    // Remove client from socket array
-    sockets.splice(sockets.indexOf(socket), 1);
+let server = net.createServer(function (socket) {
+  let loggedIn = false;
+  socket.on('data', function (data) {
+    if (data.indexOf(msgTerminator) >= 0 && data.toString().startsWith('LOGIN:')) {
+      let msg = data.toString().split(msgTerminator);
+      let username = msg[0].substring(6);
+      if (sockets.find((connectedSocket) => connectedSocket.name == username)) {
+        socket.name = socket.remoteAddress + ':' + socket.remotePort;
+        console.log(`${username}(${socket.name}) tried to connect but username already exists.`);
+        socket.write(`USERNAME_ERROR:Username "${username}" already exists.\n`);
+        socket.end();
+      } else {
+        sockets.push(socket);
+        socket.name = username;
+        console.log(`${socket.name} has joined the server.`);
+        socket.write(`MOTD:Welcome to Multiuser Chat!\n`);
+        loggedIn = true;
+        console.log('User list: ' + sockets.map((e) => e.name).join(','));
+        socket.write(`USER_LIST:${sockets.map((e) => e.name).join(',')}\n`);
+      }
+    }
   });
 
-  // When socket gets errors
+  socket.on('end', function () {
+    console.log(socket.name + ' disconnected from the server.\n');
+    if (loggedIn) {
+      sockets.splice(sockets.indexOf(socket), 1);
+    }
+  });
+
   socket.on('error', function (error) {
     console.log('Socket got problems: ', error.message);
+    if (loggedIn) {
+      sockets.splice(sockets.indexOf(socket), 1);
+    }
   });
 
   socket.on('data', function (data) {
-    // If there are clients remaining then broadcast message
-    sockets.forEach(function (socketReceiver, index, array) {
-      socketReceiver.write(`${socket.name}: ${data.toString()}`);
-    });
+    if (loggedIn) {
+      if (data.toString().startsWith('PUBLICMSG:')) {
+        sockets.forEach(function (socketReceiver, index, array) {
+          socketReceiver.write(data.toString());
+        });
+      }
+    }
   });
 });
 
-// Listening for any problems with the server
 server.on('error', function (error) {
   console.log('So we got problems!', error.message);
 });
 
-// Listen for a port to telnet to
-// then in the terminal just run 'telnet localhost [port]'
 server.listen(port, function () {
-  console.log(`Server listening at localhost: + ${port}...`);
+  console.log(`Server listening at localhost:${port}...`);
 });

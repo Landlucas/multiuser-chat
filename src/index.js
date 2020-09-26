@@ -10,8 +10,12 @@ if (require('electron-squirrel-startup')) {
 }
 
 const createWindow = () => {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  if (!process.argv[2]) {
+    console.log('The app requires a param with your username. Aborting app.');
+    app.quit();
+  }
+
+  const window = new BrowserWindow({
     width: 1240,
     height: 600,
     webPreferences: {
@@ -19,14 +23,16 @@ const createWindow = () => {
     },
   });
 
-  // and load the index.html of the app.
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  window.loadFile(path.join(__dirname, 'index.html'));
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  window.webContents.openDevTools();
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    client = new Client(mainWindow);
+  window.webContents.once('dom-ready', () => {
+    client = new Client();
+    client.connect('127.0.0.1', 12345, process.argv[2]);
+    client.socket.on('ready', () => {
+      client.listenForUpdates(window);
+    });
   });
 };
 
