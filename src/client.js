@@ -18,6 +18,7 @@ class Client {
    * @param {string} username
    */
   connect(host, port, username) {
+    this.username = username;
     this.socket.connect(port, host, () => {
       console.log(`Connected to server at ${host}:${port}.`);
       this.socket.write(`/login ${username}\n`);
@@ -40,9 +41,11 @@ class Client {
    * Listen for socket stream (server) updates.
    */
   listenForUpdates() {
+    let buffer = '';
     this.socket.on('data', (data) => {
-      let textBuffer = data.toString().split(msgEnd);
-      for (let msg of textBuffer) {
+      buffer += data;
+      let msgs = buffer.toString().split(msgEnd);
+      for (let msg of msgs) {
         if (!msg) continue;
         console.log(`Received data: ${msg}`);
         if (msg.startsWith('/motd ')) {
@@ -57,12 +60,12 @@ class Client {
         if (msg.startsWith('/user_joined ')) {
           let username = msg.substring(13);
           this.addNewUser(username, ['m-1']);
-          this.addNewChatLine(`${username} entrou no servidor.`, ['m-1', 'font-italic']);
+          this.addNewChatLine(`${username} entrou no chat.`, ['m-1', 'font-italic']);
         }
         if (msg.startsWith('/user_left ')) {
           let username = msg.substring(11);
           this.removeUser(username);
-          this.addNewChatLine(`${username} saiu do servidor.`, ['m-1', 'font-italic']);
+          this.addNewChatLine(`${username} saiu do chat.`, ['m-1', 'font-italic']);
         }
         if (msg.startsWith('/public_msg ')) {
           this.addNewChatLine(msg.substring(12), ['m-1']);
@@ -76,6 +79,7 @@ class Client {
         if (msg.startsWith('/warning ')) {
           this.addNewChatLine(`${msg.substring(9)}`, ['m-1', 'font-italic', 'text-warning']);
         }
+        buffer = msgs[msgs.length - 1];
       }
     });
   }
@@ -86,43 +90,55 @@ class Client {
    */
   sendMessage(msg) {
     if (msg.startsWith('/w ')) {
-      console.log(`Sending private message: ${msg}`);
       this.socket.write(`${msg}${msgEnd}`);
+      let splitPrivMessage = msg.substring(3).split(' ');
+      let username = splitPrivMessage[0];
+      let msgStartIndex = 4 + splitPrivMessage[0].length;
+      this.addNewChatLine(`para ${username}: ${msg.substring(msgStartIndex)}`, ['m-1', 'text-muted']);
     } else {
       this.socket.write(`/public_msg ${msg}${msgEnd}`);
+      this.addNewChatLine(`${this.username}: ${msg}`, ['m-1']);
     }
   }
 
   /**
    * Concat new line in chat window.
-   * @param {string} line 
+   * @param {string} line
    * @param {string[]} classes
    */
   addNewChatLine(line, classes) {
-    this.window.webContents.executeJavaScript(
-      `document.querySelector('.chat-window').innerHTML += '<div class="${classes.join(' ')}">${line}</div>';`
-    );
+    if (this.window) {
+      this.window.webContents.executeJavaScript(
+        `document.querySelector('.chat-window').innerHTML += '<div class="${classes.join(' ')}">${line}</div>';`
+      );
+    }
   }
 
   /**
    * Concat new username in user window.
-   * @param {string} username 
+   * @param {string} username
    * @param {string[]} classes
    */
   addNewUser(username, classes) {
-    this.window.webContents.executeJavaScript(
-      `document.querySelector('.users-list').innerHTML += '<div class="${classes.join(' ')}" data-user="${username}">${username}</div>';`
-    );
+    if (this.window) {
+      this.window.webContents.executeJavaScript(
+        `document.querySelector('.users-list').innerHTML += '<div class="${classes.join(
+          ' '
+        )}" data-user="${username}">${username}</div>';`
+      );
+    }
   }
 
   /**
    * Remove username from user window.
-   * @param {string} username 
+   * @param {string} username
    */
   removeUser(username) {
-    this.window.webContents.executeJavaScript(
-      `document.querySelector('.users-list div[data-user="${username}"]').remove();`
-    );
+    if (this.window) {
+      this.window.webContents.executeJavaScript(
+        `document.querySelector('.users-list div[data-user="${username}"]').remove();`
+      );
+    }
   }
 
   endConnection() {

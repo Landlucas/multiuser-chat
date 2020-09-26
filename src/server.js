@@ -5,12 +5,14 @@ let sockets = [];
 
 const server = net.createServer((socket) => {
   let loggedIn = false;
+  let buffer = '';
 
   socket.on('data', (data) => {
-    let textBuffer = data.toString().split(msgEnd);
-    for (let msg of textBuffer) {
+    buffer = data;
+    let msgs = buffer.toString().split(msgEnd);
+    for (let msg of msgs) {
       if (!msg) continue;
-      console.log(`Received message from ${socket.name}: ${msg}`);
+      console.log(`Received data from ${socket.name}: ${msg}`);
       if (msg.startsWith('/login ')) {
         let username = msg.substring(7);
         loggedIn = userLoginAttempt(socket, username);
@@ -18,9 +20,10 @@ const server = net.createServer((socket) => {
       if (loggedIn) {
         if (msg.startsWith('/public_msg ')) {
           console.log(`Broadcasting: /public_msg ${socket.name}: ${msg.substring(12)}`);
-          sockets.forEach((socketReceiver) => {
+          for (socketReceiver of sockets) {
+            if (socket.name == socketReceiver.name) continue;
             socketReceiver.write(`/public_msg ${socket.name}: ${msg.substring(12)}${msgEnd}`);
-          });
+          }
         }
         if (msg.startsWith('/w ') ) {
           let splitPrivMessage = msg.substring(3).split(' ');
@@ -29,13 +32,14 @@ const server = net.createServer((socket) => {
           let socketReceiver = sockets.find((connectedSocket) => connectedSocket.name == username);
           if (socketReceiver) {
             console.log(`Sending private message to ${socket.name}: ${msg.substring(msgStartIndex)}`);
-            socketReceiver.write(`/private_msg ${socket.name}: ${msg.substring(msgStartIndex)}${msgEnd}`);
+            socketReceiver.write(`/private_msg de ${socket.name}: ${msg.substring(msgStartIndex)}${msgEnd}`);
           } else {
             console.log(`User "${username}" does not exist. Unable to send private message.`);
             socket.write(`/warning Usuario "${username}" nao existe.${msgEnd}`);
           }
         }
       }
+      buffer = msgs[msgs.length - 1];
     }
   });
 

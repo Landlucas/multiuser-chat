@@ -65,11 +65,11 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   client.endConnection();
 });
-  
+
 ipcMain.on('toMain', (event, args) => {
   console.log(args);
 });
-  
+
 ipcMain.on('newMessage', (event, args) => {
   client.sendMessage(args);
 });
