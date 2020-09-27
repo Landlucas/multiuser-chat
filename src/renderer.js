@@ -1,8 +1,10 @@
 let sendButton;
+let fileButton;
 let messageInput;
 
 window.onload = () => {
   sendButton = document.querySelector('.send-message-button');
+  fileButton = document.querySelector('.send-file-button');
   messageInput = document.querySelector('.message-input');
   messageInput.value = '';
   sendButton.addEventListener('click', () => {
@@ -15,6 +17,9 @@ window.onload = () => {
       messageInput.value = '';
       messageInput.blur();
     }
+  });
+  fileButton.addEventListener('click', () => {
+    window.api.send('openDialog', '');
   });
 }
 

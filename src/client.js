@@ -1,4 +1,6 @@
 const net = require('net');
+const fs = require('fs');
+const path = require('path');
 const msgEnd = '\n';
 
 class Client {
@@ -11,6 +13,7 @@ class Client {
     this.socket.setEncoding('utf8');
     this.users = [];
     this.window = window;
+    this.username = '';
   }
 
   /**
@@ -25,15 +28,21 @@ class Client {
     });
     this.socket.on('close', () => {
       console.log(`Connection to server at ${host}:${port} closed.`);
-      this.addNewChatLine(`Conexão com servidor fechada.`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
+      if (this.window) {
+        this.addNewChatLine(`Conexão com servidor fechada.`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
+      }
     });
     this.socket.on('end', () => {
       console.log(`Connection to server at ${host}:${port} ended.`);
-      this.addNewChatLine(`Conexão com servidor finalizada.`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
+      if (this.window) {
+        this.addNewChatLine(`Conexão com servidor finalizada.`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
+      }
     });
     this.socket.on('error', (error) => {
       console.log(`Socket got problems: ${error.message}`);
-      this.addNewChatLine(`Erro: ${error.message}`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
+      if (this.window) {
+        this.addNewChatLine(`Erro: ${error.message}`, ['m-1', 'font-weight-bolder', 'font-italic', 'text-danger']);
+      }
     });
   }
 
@@ -42,6 +51,9 @@ class Client {
    */
   listenForUpdates() {
     let buffer = '';
+    let receivingFile = false;
+    let fileBuffer = '';
+    let fileName = '';
     this.socket.on('data', (data) => {
       buffer += data;
       let msgs = buffer.toString().split(msgEnd);
@@ -50,33 +62,39 @@ class Client {
         console.log(`Received data: ${msg}`);
         if (msg.startsWith('/motd ')) {
           this.addNewChatLine(msg.substring(6), ['m-1', 'font-italic', 'text-info']);
-        }
-        if (msg.startsWith('/user_list ')) {
+        } else if (msg.startsWith('/user_list ')) {
           this.users = msg.substring(11).split(',');
           this.users.forEach((username) => {
             this.addNewUser(username, ['m-1']);
           });
-        }
-        if (msg.startsWith('/user_joined ')) {
+        } else if (msg.startsWith('/user_joined ')) {
           let username = msg.substring(13);
           this.addNewUser(username, ['m-1']);
           this.addNewChatLine(`${username} entrou no chat.`, ['m-1', 'font-italic']);
-        }
-        if (msg.startsWith('/user_left ')) {
+        } else if (msg.startsWith('/user_left ')) {
           let username = msg.substring(11);
           this.removeUser(username);
           this.addNewChatLine(`${username} saiu do chat.`, ['m-1', 'font-italic']);
-        }
-        if (msg.startsWith('/public_msg ')) {
+        } else if (msg.startsWith('/public_msg ')) {
           this.addNewChatLine(msg.substring(12), ['m-1']);
-        }
-        if (msg.startsWith('/private_msg ')) {
+        } else if (msg.startsWith('/private_msg ')) {
           this.addNewChatLine(msg.substring(13), ['m-1', 'text-muted']);
-        }
-        if (msg.startsWith('/error ')) {
+        } else if (msg.startsWith('/file_send_start ')) {
+          receivingFile = true;
+          let splitStartMsg = msg.split(' ');
+          fileName = splitStartMsg[1];
+        } else if (receivingFile) {
+          if (msg.startsWith('/file_send_end')) {
+            receivingFile = false;
+            this.saveReceivedFile(fileName, fileBuffer);
+            fileBuffer = '';
+            fileName = '';
+          } else {
+            fileBuffer += msg;
+          }
+        } else if (msg.startsWith('/error ')) {
           this.addNewChatLine(`Erro: ${msg.substring(7)}`, ['m-1', 'font-italic', 'text-danger']);
-        }
-        if (msg.startsWith('/warning ')) {
+        } else if (msg.startsWith('/warning ')) {
           this.addNewChatLine(`${msg.substring(9)}`, ['m-1', 'font-italic', 'text-warning']);
         }
         buffer = msgs[msgs.length - 1];
@@ -102,16 +120,49 @@ class Client {
   }
 
   /**
+   * Send file to socket stream (server).
+   * @param {string} filePath
+   */
+  sendFile(filePath) {
+    console.log(`Sending file from ${filePath}`);
+    let fileStream = fs.createReadStream(filePath);
+    this.socket.write(`/file_send_start ${path.basename(filePath)}${msgEnd}`);
+    fileStream.pipe(this.socket, { end: false });
+    fileStream.on('end', () => {
+      this.socket.write(`${msgEnd}/file_send_end${msgEnd}`);
+    });
+  }
+
+  /**
+   * Save received file.
+   * @param {string} fileName
+   * @param {string} fileData
+   */
+  saveReceivedFile(fileName, fileData) {
+    let filePathDir = path.resolve(__dirname, '..', 'temp', this.username);
+    if (!fs.existsSync(filePathDir)) {
+      fs.mkdirSync(filePathDir, { recursive: true });
+    }
+    let filePath = path.resolve(__dirname, '..', 'temp', this.username, fileName);
+    console.log(`Saving file at ${filePath}`);
+    fs.appendFile(filePath, fileData, (err) => {
+      if (err) throw err;
+    });
+  }
+
+  /**
    * Concat new line in chat window.
    * @param {string} line
    * @param {string[]} classes
    */
   addNewChatLine(line, classes) {
-    if (this.window) {
-      this.window.webContents.executeJavaScript(
-        `document.querySelector('.chat-window').innerHTML += '<div class="${classes.join(' ')}">${line}</div>';`
-      );
-    }
+    try {
+      if (this.window) {
+        this.window.webContents.executeJavaScript(
+          `document.querySelector('.chat-window').innerHTML += '<div class="${classes.join(' ')}">${line}</div>';`
+        );
+      }
+    } catch (err) {}
   }
 
   /**
@@ -120,13 +171,15 @@ class Client {
    * @param {string[]} classes
    */
   addNewUser(username, classes) {
-    if (this.window) {
-      this.window.webContents.executeJavaScript(
-        `document.querySelector('.users-list').innerHTML += '<div class="${classes.join(
-          ' '
-        )}" data-user="${username}">${username}</div>';`
-      );
-    }
+    try {
+      if (this.window) {
+        this.window.webContents.executeJavaScript(
+          `document.querySelector('.users-list').innerHTML += '<div class="${classes.join(
+            ' '
+          )}" data-user="${username}">${username}</div>';`
+        );
+      }
+    } catch (err) {}
   }
 
   /**
@@ -134,11 +187,13 @@ class Client {
    * @param {string} username
    */
   removeUser(username) {
-    if (this.window) {
-      this.window.webContents.executeJavaScript(
-        `document.querySelector('.users-list div[data-user="${username}"]').remove();`
-      );
-    }
+    try {
+      if (this.window) {
+        this.window.webContents.executeJavaScript(
+          `document.querySelector('.users-list div[data-user="${username}"]').remove();`
+        );
+      }
+    } catch (err) {}
   }
 
   endConnection() {

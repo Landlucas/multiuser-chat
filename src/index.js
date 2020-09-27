@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 let Client = require('./client');
 let client;
@@ -25,6 +25,10 @@ const createWindow = () => {
       enableRemoteModule: false,
       preload: path.join(app.getAppPath(), 'src/preload.js'),
     },
+  });
+
+  window.on('closed', () => {
+    window = null;
   });
 
   window.loadFile(path.join(__dirname, 'index.html'));
@@ -66,8 +70,19 @@ app.on('before-quit', () => {
   client.endConnection();
 });
 
-ipcMain.on('toMain', (event, args) => {
-  console.log(args);
+ipcMain.on('openDialog', (event, args) => {
+  dialog
+    .showOpenDialog({ properties: ['openFile'] })
+    .then((result) => {
+      if (!result.canceled) {
+        for (let filePath of result.filePaths) {
+          client.sendFile(filePath);
+        }
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+    });
 });
 
 ipcMain.on('newMessage', (event, args) => {

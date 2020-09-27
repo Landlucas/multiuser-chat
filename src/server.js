@@ -6,36 +6,46 @@ let sockets = [];
 const server = net.createServer((socket) => {
   let loggedIn = false;
   let buffer = '';
+  let receivingFile = false;
+  let fileBuffer = '';
+  let fileName = '';
 
   socket.on('data', (data) => {
     buffer = data;
     let msgs = buffer.toString().split(msgEnd);
     for (let msg of msgs) {
       if (!msg) continue;
-      console.log(`Received data from ${socket.name}: ${msg}`);
+      console.log(`Received data from ${socket.name}`);
       if (msg.startsWith('/login ')) {
         let username = msg.substring(7);
         loggedIn = userLoginAttempt(socket, username);
       }
       if (loggedIn) {
         if (msg.startsWith('/public_msg ')) {
-          console.log(`Broadcasting: /public_msg ${socket.name}: ${msg.substring(12)}`);
-          for (socketReceiver of sockets) {
-            if (socket.name == socketReceiver.name) continue;
-            socketReceiver.write(`/public_msg ${socket.name}: ${msg.substring(12)}${msgEnd}`);
+          publicMsg(socket, msg);
+          if (receivingFile) {
+            fileError(socket);
           }
         }
-        if (msg.startsWith('/w ') ) {
-          let splitPrivMessage = msg.substring(3).split(' ');
-          let username = splitPrivMessage[0];
-          let msgStartIndex = 4 + splitPrivMessage[0].length;
-          let socketReceiver = sockets.find((connectedSocket) => connectedSocket.name == username);
-          if (socketReceiver) {
-            console.log(`Sending private message to ${socket.name}: ${msg.substring(msgStartIndex)}`);
-            socketReceiver.write(`/private_msg de ${socket.name}: ${msg.substring(msgStartIndex)}${msgEnd}`);
+        else if (msg.startsWith('/w ') ) {
+          privateMsg(socket, msg);
+          if (receivingFile) {
+            fileError(socket);
+          }
+        }
+        else if (msg.startsWith('/file_send_start') ) {
+          receivingFile = true;
+          let splitStartMsg = msg.split(' ');
+          fileName = splitStartMsg[1];
+        }
+        else if (receivingFile) {
+          if (msg.startsWith('/file_send_end') ) {
+            receivingFile = false;
+            sendFile(socket, fileName, fileBuffer);
+            fileBuffer = '';
+            fileName = '';
           } else {
-            console.log(`User "${username}" does not exist. Unable to send private message.`);
-            socket.write(`/warning Usuario "${username}" nao existe.${msgEnd}`);
+            fileBuffer += msg;
           }
         }
       }
@@ -105,6 +115,61 @@ const existingUser = (socket, username) => {
   socket.write(`/error Usuário "${username}" já existe.${msgEnd}`);
   socket.end();
 };
+
+/**
+ * Handles public messages.
+ * @param {net.Socket} socket 
+ * @param {string} msg 
+ */
+const publicMsg = (socket, msg) => {
+  console.log(`Broadcasting: /public_msg ${socket.name}: ${msg.substring(12)}`);
+  for (socketReceiver of sockets) {
+    if (socket.name == socketReceiver.name) continue;
+    socketReceiver.write(`/public_msg ${socket.name}: ${msg.substring(12)}${msgEnd}`);
+  }
+}
+
+/**
+ * Handles private messages.
+ * @param {net.Socket} socket 
+ * @param {string} msg 
+ */
+const privateMsg = (socket, msg) => {
+  let splitPrivMessage = msg.substring(3).split(' ');
+  let username = splitPrivMessage[0];
+  let msgStartIndex = 4 + splitPrivMessage[0].length;
+  let socketReceiver = sockets.find((connectedSocket) => connectedSocket.name == username);
+  if (socketReceiver) {
+    console.log(`Sending private message to ${socket.name}: ${msg.substring(msgStartIndex)}`);
+    socketReceiver.write(`/private_msg de ${socket.name}: ${msg.substring(msgStartIndex)}${msgEnd}`);
+  } else {
+    console.log(`User "${username}" does not exist. Unable to send private message.`);
+    socket.write(`/warning Usuario "${username}" nao existe.${msgEnd}`);
+  }
+}
+
+/**
+ * Handles file sending.
+ * @param {net.Socket} socket 
+ * @param {string} fileName 
+ * @param {string} data 
+ */
+const sendFile = (socket, fileName, data) => {
+  console.log(`Broadcasting file received from ${socket.name}: ${data}`);
+  for (socketReceiver of sockets) {
+    if (socket.name == socketReceiver.name) continue;
+    socketReceiver.write(`/file_send_start ${fileName}${msgEnd}${data}${msgEnd}/file_send_end${msgEnd}`);
+  }
+}
+
+/**
+ * Handles file send error.
+ * @param {net.Socket} socket 
+ */
+const fileError = (socket) => {
+  console.log(`Error receiving file from ${socket.name}`);
+  socket.name.write(`/error Houve um problema no envio do arquivo.${msgEnd}`);
+}
 
 server.on('error', function (error) {
   console.log('So we got problems!', error.message);

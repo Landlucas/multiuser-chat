@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   send: (channel, data) => {
     // allowlist channels
-    let validChannels = ['toMain', 'newMessage'];
+    let validChannels = ['newMessage', 'openDialog'];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     }
