@@ -1,6 +1,7 @@
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const msgEnd = '\n';
 
 class Client {
@@ -14,6 +15,7 @@ class Client {
     this.users = [];
     this.window = window;
     this.username = '';
+    this.downloadedFiles = [];
   }
 
   /**
@@ -54,6 +56,7 @@ class Client {
     let receivingFile = false;
     let fileBuffer = '';
     let fileName = '';
+    let fileHash;
     this.socket.on('data', (data) => {
       buffer += data;
       let msgs = buffer.toString().split(msgEnd);
@@ -146,7 +149,18 @@ class Client {
     let filePath = path.resolve(__dirname, '..', 'temp', this.username, fileName);
     console.log(`Saving file at ${filePath}`);
     fs.appendFile(filePath, fileData, (err) => {
-      if (err) throw err;
+      if (err) {
+        throw err;
+      } else {
+        let fileHash = crypto.createHash('md5');
+        fileHash.update(fileData);
+        let id = fileHash.digest('hex');
+        this.downloadedFiles[id] = filePath;
+        this.addNewChatLine(`Arquivo recebido: <a href="#" class="file-link" id="${id}">${fileName}</a>`, ['m-1']);
+        this.window.webContents.executeJavaScript(
+          `document.getElementById('${id}').addEventListener('click', () => window.api.send('openFile', '${id}'));`
+        );
+      }
     });
   }
 

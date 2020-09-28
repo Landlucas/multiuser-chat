@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 let Client = require('./client');
 let client;
@@ -70,6 +70,10 @@ app.on('before-quit', () => {
   client.endConnection();
 });
 
+ipcMain.on('newMessage', (event, msg) => {
+  client.sendMessage(msg);
+});
+
 ipcMain.on('openDialog', (event, args) => {
   dialog
     .showOpenDialog({ properties: ['openFile'] })
@@ -85,6 +89,7 @@ ipcMain.on('openDialog', (event, args) => {
     });
 });
 
-ipcMain.on('newMessage', (event, args) => {
-  client.sendMessage(args);
+ipcMain.on('openFile', (event, id) => {
+  let filePath = client.downloadedFiles[id];
+  shell.openPath(filePath);
 });
